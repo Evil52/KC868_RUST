@@ -1,6 +1,58 @@
 [package]
-name = "KC868_RUST"
+name = "kc868_a6"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+rust-version = "1.84"
+
+[[bin]]
+name = "kc868_a6"
+path = "src/main.rs"
+test = false
+bench = false
+
+[profile.dev]
+opt-level = "s"
+debug = true
+lto = false
+codegen-units = 1
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = "fat"
+codegen-units = 1
+overflow-checks = false
 
 [dependencies]
+# --- HAL + async runtime -------------------------------------------------
+esp-hal           = { version = "0.23.1", features = ["esp32"] }
+esp-hal-embassy   = { version = "0.6.0",  features = ["esp32"] }
+esp-backtrace     = { version = "0.15.0", features = ["esp32", "panic-handler", "exception-handler", "println"] }
+esp-println       = { version = "0.13.0", features = ["esp32", "log"] }
+esp-alloc         = "0.6.0"
+
+# --- Embassy -------------------------------------------------------------
+embassy-executor  = { version = "0.7.0", features = ["task-arena-size-40960"] }
+embassy-time      = { version = "0.4.0" }
+embassy-sync      = { version = "0.6.2" }
+embassy-futures   = { version = "0.1.1" }
+
+# --- Networking (WiFi + TCP + MQTT) -------------------------------------
+esp-wifi          = { version = "0.12.0", features = ["esp32", "wifi", "utils", "log"] }
+embassy-net       = { version = "0.6.0",  features = ["tcp", "dhcpv4", "medium-ethernet", "proto-ipv4", "dns"] }
+rust-mqtt         = { version = "0.3.0",  default-features = false }
+
+# --- Traits / utilities --------------------------------------------------
+embedded-hal         = "1.0.0"
+embedded-hal-async   = "1.0.0"
+embedded-hal-bus     = { version = "0.3.0", features = ["async"] }
+embedded-io-async    = "0.6.1"
+embassy-embedded-hal = "0.3.0"
+static_cell          = "2.1.0"
+heapless             = "0.8.0"
+log                  = "0.4.22"
+libm                 = "0.2.11"
+
+# --- OLED ----------------------------------------------------------------
+ssd1306              = { version = "0.10", default-features = false, features = ["async", "graphics"] }
+embedded-graphics    = "0.8"

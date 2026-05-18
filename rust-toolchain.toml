@@ -1,0 +1,5 @@
+[toolchain]
+# Xtensa toolchain (installed via espup). Pin to a known-good channel.
+# Install with:  espup install
+channel    = "esp"
+components = ["rust-src"]
