@@ -15,34 +15,11 @@
 //!
 //! Each test module has a `run_all() -> Result<(), &'static str>` entry
 //! point.  A passing test returns Ok(()); a failing test returns Err(msg).
+//!
+//! NOTE: #[panic_handler] is provided by esp-backtrace (dependency in
+//! Cargo.toml), so we do NOT define our own here.
 
-use core::fmt::Write;
-
-// ---------------------------------------------------------------------------
-// minimal panic handler — required for no_std on ESP32
-// ---------------------------------------------------------------------------
-use core::panic::PanicInfo;
-
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    // In a real test runner we would print the message via UART.
-    // For now the panic message is visible via the ESP32 monitor.
-    loop {}
-}
-
-// ---------------------------------------------------------------------------
-// output helpers — write test results via esp-println
-// ---------------------------------------------------------------------------
 use esp_println::println;
-
-#[allow(dead_code)]
-fn log_pass(name: &str) {
-    println!("  PASS  {}", name);
-}
-
-fn log_fail(name: &str, msg: &str) {
-    println!("  FAIL  {}: {}", name, msg);
-}
 
 macro_rules! check {
     ($cond:expr, $msg:expr) => {

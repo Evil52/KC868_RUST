@@ -12,7 +12,7 @@ bench = false
 
 [[bin]]
 name = "unit_tests"
-path = "tests/unit_tests.rs"
+path = "src/bin/unit_tests.rs"
 test = false
 bench = false
 
