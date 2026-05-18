@@ -16,9 +16,11 @@
 //! Each test module has a `run_all() -> Result<(), &'static str>` entry
 //! point.  A passing test returns Ok(()); a failing test returns Err(msg).
 //!
-//! NOTE: #[panic_handler] is provided by esp-backtrace (dependency in
-//! Cargo.toml), so we do NOT define our own here.
+//! NOTE: #[panic_handler] is provided by esp-backtrace, but only when the
+//! crate is referenced via `use esp_backtrace as _` (otherwise the linker
+//! drops the unused symbol).
 
+use esp_backtrace as _;
 use esp_println::println;
 
 macro_rules! check {
@@ -59,76 +61,81 @@ mod pt100_tests {
     const B: f32 = -5.775e-7;
     const C: f32 = -4.183e-12;
     const R0: f32 = 100.0;
+    const T_MIN_C: f32 = -200.0;
+    const T_MAX_C: f32 =  850.0;
 
-    fn resistance_to_celsius(r_ohms: f32, r0: f32) -> f32 {
+    // Inline copy of `src/pt100.rs::resistance_to_celsius` — keep in sync.
+    fn resistance_to_celsius(r_ohms: f32, r0: f32) -> Option<f32> {
+        if !r_ohms.is_finite() || r_ohms <= 0.0 { return None; }
         let ratio = r_ohms / r0;
         let disc = A * A - 4.0 * B * (1.0 - ratio);
+        if disc < 0.0 { return None; }
         let t_pos = (-A + sqrtf(disc)) / (2.0 * B);
 
-        if t_pos >= 0.0 {
-            return t_pos;
-        }
+        let t = if t_pos >= 0.0 {
+            t_pos
+        } else {
+            let mut t = t_pos;
+            let mut converged = false;
+            for _ in 0..6 {
+                let t2 = t * t;
+                let t3 = t2 * t;
+                let f  = r0 * (1.0 + A * t + B * t2 + C * (t - 100.0) * t3) - r_ohms;
+                let df = r0 * (A + 2.0 * B * t + C * (4.0 * t3 - 300.0 * t2));
+                if df.abs() < f32::EPSILON { break; }
+                let next = t - f / df;
+                if (next - t).abs() < 1e-4 { t = next; converged = true; break; }
+                t = next;
+            }
+            if !converged { return None; }
+            t
+        };
 
-        let mut t = t_pos;
-        for _ in 0..6 {
-            let t2 = t * t;
-            let t3 = t2 * t;
-            let f = r0 * (1.0 + A * t + B * t2 + C * (t - 100.0) * t3) - r_ohms;
-            let df = r0 * (A + 2.0 * B * t + C * (4.0 * t3 - 300.0 * t2));
-            if df.abs() < f32::EPSILON {
-                break;
-            }
-            let next = t - f / df;
-            if (next - t).abs() < 1e-4 {
-                return next;
-            }
-            t = next;
-        }
-        t
+        if (T_MIN_C..=T_MAX_C).contains(&t) { Some(t) } else { None }
     }
 
     pub fn run_all() -> Result<(), &'static str> {
         // 0 °C → R0
-        let t = resistance_to_celsius(R0, R0);
+        let t = resistance_to_celsius(R0, R0).ok_or("0 °C unexpectedly None")?;
         check!((t - 0.0).abs() < 0.1, "0 °C mismatch");
 
         // 100 °C → ≈138.51 Ω
-        let t = resistance_to_celsius(138.51, R0);
+        let t = resistance_to_celsius(138.51, R0).ok_or("100 °C unexpectedly None")?;
         check!((t - 100.0).abs() < 0.5, "100 °C mismatch");
 
         // 200 °C → ≈175.86 Ω
-        let t = resistance_to_celsius(175.86, R0);
+        let t = resistance_to_celsius(175.86, R0).ok_or("200 °C unexpectedly None")?;
         check!((t - 200.0).abs() < 0.5, "200 °C mismatch");
 
         // 500 °C → ≈280.98 Ω
-        let t = resistance_to_celsius(280.98, R0);
+        let t = resistance_to_celsius(280.98, R0).ok_or("500 °C unexpectedly None")?;
         check!((t - 500.0).abs() < 1.0, "500 °C mismatch");
 
         // -50 °C → ≈80.31 Ω
-        let t = resistance_to_celsius(80.31, R0);
+        let t = resistance_to_celsius(80.31, R0).ok_or("-50 °C unexpectedly None")?;
         check!((t - (-50.0)).abs() < 0.5, "-50 °C mismatch");
 
         // -100 °C → ≈60.26 Ω
-        let t = resistance_to_celsius(60.26, R0);
+        let t = resistance_to_celsius(60.26, R0).ok_or("-100 °C unexpectedly None")?;
         check!((t - (-100.0)).abs() < 0.5, "-100 °C mismatch");
 
         // -200 °C → ≈18.52 Ω
-        let t = resistance_to_celsius(18.52, R0);
+        let t = resistance_to_celsius(18.52, R0).ok_or("-200 °C unexpectedly None")?;
         check!((t - (-200.0)).abs() < 1.0, "-200 °C mismatch");
 
-        // Short circuit detection
-        let t = resistance_to_celsius(0.0, R0);
-        check!(t < -200.0, "short circuit should give T < -200");
+        // Short circuit detection → None
+        check!(resistance_to_celsius(0.0, R0).is_none(), "short circuit should be None");
+        check!(resistance_to_celsius(-1.0, R0).is_none(), "negative R should be None");
+        check!(resistance_to_celsius(f32::NAN, R0).is_none(), "NaN should be None");
 
-        // Open circuit detection
-        let t = resistance_to_celsius(400.0, R0);
-        check!(t > 800.0, "open circuit should give T > 800");
+        // Open circuit detection → None (T > 850 °C is out of range)
+        check!(resistance_to_celsius(400.0, R0).is_none(), "open circuit should be None");
 
         // Monotonicity
         let resistors = [60.0f32, 80.0, 100.0, 120.0, 150.0, 200.0];
         let mut prev = f32::NEG_INFINITY;
         for &r in &resistors {
-            let t = resistance_to_celsius(r, R0);
+            let t = resistance_to_celsius(r, R0).ok_or("valid R returned None")?;
             check!(t > prev, "non-monotonic");
             prev = t;
         }
@@ -366,8 +373,10 @@ mod max31865_tests {
 // Test runner entry point
 // ============================================================================
 
-#[no_mangle]
+#[esp_hal::main]
 fn main() -> ! {
+    let _peripherals = esp_hal::init(esp_hal::Config::default());
+
     println!("=== KC868-A6 Unit Tests ===\n");
 
     let mut passed: u32 = 0;
