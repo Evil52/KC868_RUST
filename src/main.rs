@@ -17,6 +17,7 @@
 extern crate alloc;
 
 mod bsp;
+mod button;
 mod display;
 mod ha_discovery;
 mod hw_watchdog;
@@ -38,7 +39,7 @@ use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
-use esp_hal::gpio::Output;
+use esp_hal::gpio::{Input, Output, Pull};
 use esp_hal::rng::Rng;
 use esp_hal::time::RateExtU32;
 use esp_hal::timer::timg::TimerGroup;
@@ -207,6 +208,11 @@ async fn main(spawner: Spawner) {
         input_i2c, bsp::i2c_addr::INPUT_EXPANDER, relay_tx,
     ));
     spawner.must_spawn(hw_watchdog::hw_watchdog_task(hw_wdt));
+
+    // Front-panel GPIO0 button → relay running-lights self-test.
+    // On-board R52 (10 kΩ) pulls it high; a press drives it low.
+    let test_button = Input::new(peripherals.GPIO0, Pull::Up);
+    spawner.must_spawn(button::button_task(test_button, relay_tx));
     // spawner.must_spawn(temperature::temperature_task(max31865)); // no sensor
 
     // Wait for IP, then bring MQTT + comms watchdog up.
