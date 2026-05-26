@@ -61,8 +61,8 @@ mod pt100_tests {
     const B: f32 = -5.775e-7;
     const C: f32 = -4.183e-12;
     const R0: f32 = 100.0;
-    const T_MIN_C: f32 = -200.0;
-    const T_MAX_C: f32 =  850.0;
+    const T_MIN_C: f32 = -210.0;
+    const T_MAX_C: f32 =  860.0;
 
     // Inline copy of `src/pt100.rs::resistance_to_celsius` — keep in sync.
     fn resistance_to_celsius(r_ohms: f32, r0: f32) -> Option<f32> {
@@ -257,13 +257,15 @@ mod relay_tests {
 // ============================================================================
 
 mod mqtt_parsing_tests {
+    // Mirror of `mqtt::handle_relay_set` parsing. Keep in sync — any
+    // change to topic/payload semantics in the real handler should be
+    // reflected here so this test catches regressions.
     fn parse_relay_cmd(topic: &str, payload: &[u8]) -> Option<(u8, bool)> {
         let suffix = topic.strip_prefix("kc868/relay")?;
         let suffix = suffix.trim_start_matches('/');
         let mut parts = suffix.split('/');
-        let idx_str = parts.next()?;
-        let cmd = parts.next()?;
-        if cmd != "set" {
+        let (idx_str, cmd, rest) = (parts.next()?, parts.next()?, parts.next());
+        if cmd != "set" || rest.is_some() {
             return None;
         }
         let idx: u8 = idx_str.parse().ok()?;

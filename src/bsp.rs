@@ -53,6 +53,23 @@ pub mod relay {
     pub const IDLE_PORT_VALUE: u8 = 0xFF;
 }
 
+/// 12 V opto-isolated digital inputs (IN1..IN6 → U6 P0..P5).
+/// Bit semantics: opto-LED ON (12 V at terminal) pulls the PCF8574 pin
+/// LOW. So `bit == 0` means "input is energised (12 V present)".
+///
+/// `ARM_SAFETY` controls whether `input_task` engages the global safety
+/// interlock when an input opens. **Default: false** because a freshly
+/// flashed board has no field wiring — auto-arming would lock the
+/// controller immediately. When you wire a real fail-safe loop (12 V
+/// through NC E-Stop contacts → all inputs energised when safe) set
+/// this to `true` and rebuild.
+pub mod input {
+    pub const COUNT: usize = 6;
+    pub const MASK:  u8    = 0x3F; // P0..P5
+    pub const POLL_PERIOD_MS: u64 = 100;
+    pub const ARM_SAFETY: bool = false;
+}
+
 /// MAX31865 module configuration.
 pub mod max31865 {
     /// Reference resistor on the breakout (Adafruit board = 430 Ω, generic
@@ -68,9 +85,21 @@ pub mod max31865 {
 pub mod mqtt_topic {
     pub const BASE:        &str = "kc868";
     pub const TEMPERATURE: &str = "kc868/temperature";
-    /// Single-level wildcard subscription for relay commands:
-    ///   kc868/relay/<0..5>/set   payload: "0" | "1"
-    pub const RELAY_CMD_SUB: &str = "kc868/relay/+/set";
-    pub const RELAY_STATE_PREFIX: &str = "kc868/relay";
-    pub const STATUS:       &str = "kc868/status";
+
+    // ---------- subscriptions ----------------------------------------
+    /// Relay commands: `kc868/relay/<0..5>/set`, payload "0|1|on|off|…"
+    pub const RELAY_CMD_SUB:  &str = "kc868/relay/+/set";
+    /// Manual safety-interlock reset: `kc868/safety/reset`, any payload.
+    pub const SAFETY_RESET:   &str = "kc868/safety/reset";
+
+    // ---------- publications (retained where noted) ------------------
+    pub const STATUS:        &str = "kc868/status";          // "online" / "offline" (LWT)
+    pub const SAFETY_STATE:  &str = "kc868/safety/state";    // "ok" / "locked" (retained)
+    pub const INPUTS_STATE:  &str = "kc868/inputs";          // "0b00000000" (retained)
+    pub const RELAY_STATE_PREFIX: &str = "kc868/relay";      // …/<N>/state -> "ON|OFF"
+    pub const DIAGNOSTICS:    &str = "kc868/diagnostics";    // JSON, periodic
+
+    // ---------- HA discovery prefix ----------------------------------
+    pub const HA_DISCOVERY_PREFIX: &str = "homeassistant";
+    pub const DEVICE_ID:           &str = "kc868_a6";
 }

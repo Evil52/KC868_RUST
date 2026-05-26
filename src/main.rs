@@ -18,11 +18,16 @@ extern crate alloc;
 
 mod bsp;
 mod display;
+mod ha_discovery;
+mod hw_watchdog;
+mod inputs;
 mod pcf8574;
 mod relays;
 mod max31865;
 mod pt100;
+mod safety;
 mod temperature;
+mod watchdog;
 mod wifi;
 mod mqtt;
 
@@ -51,6 +56,21 @@ pub type I2cBus = embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice<
 
 type RawSpi = esp_hal::spi::master::Spi<'static, esp_hal::Async>;
 pub type SpiDev = ExclusiveDevice<RawSpi, Output<'static>, Delay>;
+
+/// Boot-time fatal: log the offending subsystem + error, wait 5 s so the
+/// log line actually flushes over UART, then trigger a software reset.
+/// Diverges (`-> !`) so callers can use it as a fall-through expression.
+///
+/// Never returns. Spinning `loop {}` after the reset call is unreachable
+/// in practice but lets the compiler keep the `!` return type without
+/// relying on `software_reset`'s signature being `-> !` (it isn't on
+/// esp-hal 0.23, which returns `()`).
+async fn fatal_init<E: core::fmt::Debug + ?Sized>(subsystem: &str, err: &E) -> ! {
+    log::error!("FATAL: {} init failed: {:?} — rebooting in 5 s", subsystem, err);
+    embassy_time::Timer::after(embassy_time::Duration::from_secs(5)).await;
+    esp_hal::reset::software_reset();
+    loop { embassy_futures::yield_now().await; }
+}
 
 /// Boot-time I²C bus scan. Pings every 7-bit address in the valid range
 /// (0x08..=0x77) by issuing a 0-byte read; an ACK means a device lives
@@ -91,25 +111,34 @@ async fn main(spawner: Spawner) {
     let timg1 = TimerGroup::new(peripherals.TIMG1);
     esp_hal_embassy::init(timg1.timer0);
 
+    // Pluck the WDT out of TIMG0 before we surrender `timg0.timer0` to
+    // esp-wifi — they're independent sub-peripherals of the same block
+    // but Rust ownership won't let us touch `timg0.wdt` once any field
+    // has been moved if TimerGroup is `Drop`. Do this first.
+    let hw_wdt = timg0.wdt;
+
     // -----------------------------------------------------------------
     // I2C bus — shared between PCF8574 (relays), input PCF8574, OLED, RTC.
     // KC868-A6 v1.4SP pinout: GPIO 4 (SDA) / GPIO 15 (SCL).
     // -----------------------------------------------------------------
-    let i2c = esp_hal::i2c::master::I2c::new(
+    let i2c = match esp_hal::i2c::master::I2c::new(
         peripherals.I2C0,
         esp_hal::i2c::master::Config::default()
             .with_frequency(bsp::i2c::FREQ_HZ.Hz()),
-    )
-    .expect("i2c init")
-    .with_sda(peripherals.GPIO4)
-    .with_scl(peripherals.GPIO15)
-    .into_async();
+    ) {
+        Ok(i2c) => i2c
+            .with_sda(peripherals.GPIO4)
+            .with_scl(peripherals.GPIO15)
+            .into_async(),
+        Err(e) => fatal_init("i2c", &e).await,
+    };
 
     static I2C_MUTEX: StaticCell<I2cMutex> = StaticCell::new();
     let i2c_mutex: &'static I2cMutex = I2C_MUTEX.init(Mutex::new(i2c));
 
     let relay_i2c   = embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice::new(i2c_mutex);
     let display_i2c = embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice::new(i2c_mutex);
+    let input_i2c   = embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice::new(i2c_mutex);
 
     // -----------------------------------------------------------------
     // SPI bus + MAX31865 — disabled until the Pt100 hardware is wired.
@@ -127,16 +156,21 @@ async fn main(spawner: Spawner) {
     let mut rng = Rng::new(peripherals.RNG);
     let seed = ((rng.random() as u64) << 32) | rng.random() as u64;
 
-    let wifi_init = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK)
-        .expect("wifi init");
+    let wifi_init = match esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK) {
+        Ok(w) => w,
+        Err(e) => fatal_init("wifi", &e).await,
+    };
     static WIFI_INIT: StaticCell<esp_wifi::EspWifiController<'static>> = StaticCell::new();
     let wifi_init = WIFI_INIT.init(wifi_init);
 
-    let (wifi_device, wifi_controller) = esp_wifi::wifi::new_with_mode(
+    let (wifi_device, wifi_controller) = match esp_wifi::wifi::new_with_mode(
         wifi_init,
         peripherals.WIFI,
         esp_wifi::wifi::WifiStaDevice,
-    ).expect("wifi mode");
+    ) {
+        Ok(pair) => pair,
+        Err(e) => fatal_init("wifi mode", &e).await,
+    };
 
     let stack = wifi::start(&spawner, wifi_controller, wifi_device, seed);
 
@@ -160,15 +194,26 @@ async fn main(spawner: Spawner) {
     // -----------------------------------------------------------------
     // Spawn workers.
     // -----------------------------------------------------------------
-    let relays = relays::Relays::new(relay_i2c, bsp::i2c_addr::RELAY_EXPANDER).await;
+    let relays = match relays::Relays::new(relay_i2c, bsp::i2c_addr::RELAY_EXPANDER).await {
+        Ok(r) => r,
+        // We cannot prove relay state without I²C — refuse to run.
+        // PCF8574 powers up tri-stated → port reads 0xFF → active-low
+        // chain interprets as all-OFF, which is the safe state.
+        Err(e) => fatal_init("relay expander", &e).await,
+    };
     spawner.must_spawn(relays::relay_task(relays, relay_rx));
-    spawner.must_spawn(display::display_task(display_i2c));
+    spawner.must_spawn(display::display_task(display_i2c, stack));
+    spawner.must_spawn(inputs::input_task(
+        input_i2c, bsp::i2c_addr::INPUT_EXPANDER, relay_tx,
+    ));
+    spawner.must_spawn(hw_watchdog::hw_watchdog_task(hw_wdt));
     // spawner.must_spawn(temperature::temperature_task(max31865)); // no sensor
 
-    // Wait for IP, then bring MQTT up.
+    // Wait for IP, then bring MQTT + comms watchdog up.
     wifi::wait_for_link(&stack).await;
     spawner.must_spawn(mqtt::mqtt_publisher_task(stack));
     spawner.must_spawn(mqtt::mqtt_subscriber_task(stack, relay_tx));
+    spawner.must_spawn(watchdog::watchdog_task(stack, relay_tx));
 
     info!("startup complete");
 }
