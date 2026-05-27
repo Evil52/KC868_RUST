@@ -4,7 +4,11 @@ target = "xtensa-esp32-none-elf"
 [target.xtensa-esp32-none-elf]
 # `--ignore-app-descriptor` — we're bare-metal esp-hal, not esp-idf, so the
 # IDF app-descriptor that espflash 4.x looks for is intentionally absent.
-runner = "espflash flash --monitor --ignore-app-descriptor"
+# `--partition-table` — OTA layout (ota_0/ota_1/otadata) so the firmware can
+# self-update over WiFi; espflash writes the USB image into ota_0.
+# `--erase-parts otadata` — wipe the boot-select record on every USB flash so
+# the bootloader always falls back to ota_0 (the slot espflash just wrote).
+runner = "espflash flash --monitor --ignore-app-descriptor --partition-table partitions.csv --erase-parts otadata"
 
 rustflags = [
     "-C", "link-arg=-Tlinkall.x",
@@ -16,11 +20,17 @@ build-std = ["alloc", "core"]
 
 [env]
 ESP_LOG = "info"
-# Compile-time secrets — override before `cargo build`, or place in a
-# .cargo/config.local.toml and source it from your shell.
-# wifi.rs reads env!("ESP32") and env!("14310324") — keep names in sync.
-ESP32        = "ESP32"
-"14310324"   = "14310324"
-MQTT_HOST    = "192.168.0.10"   # Windows host (WiFi adapter) running mosquitto
-MQTT_PORT    = "1883"
+# Compile-time configuration. The values below are PLACEHOLDERS — replace
+# them with your own network/broker details before flashing.
+#
+# Do NOT commit real Wi-Fi credentials here. Either edit these locally and
+# keep the change out of git, or put a `[env]` block with the real values in
+# `.cargo/config.local.toml` (git-ignored) — Cargo merges it over this file.
+#
+# wifi.rs reads env!("WIFI_SSID") / env!("WIFI_PASSWORD"); mqtt.rs reads
+# MQTT_HOST / MQTT_PORT / MQTT_CLIENT_ID. Keep the names in sync.
+WIFI_SSID      = "ASUS_D8"
+WIFI_PASSWORD  = "00000000"
+MQTT_HOST      = "192.168.137.156"   # твой Windows IP (WiFi адаптер)
+MQTT_PORT      = "1883"
 MQTT_CLIENT_ID = "kc868-a6"

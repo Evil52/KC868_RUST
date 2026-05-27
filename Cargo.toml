@@ -33,12 +33,14 @@ overflow-checks = false
 # --- HAL + async runtime -------------------------------------------------
 esp-hal           = { version = "0.23.1", features = ["esp32"] }
 esp-hal-embassy   = { version = "0.6.0",  features = ["esp32"] }
-esp-backtrace     = { version = "0.15.0", features = ["esp32", "panic-handler", "exception-handler", "println"] }
+esp-backtrace     = { version = "0.15.0", features = ["esp32", "panic-handler", "println"] }
 esp-println       = { version = "0.13.0", features = ["esp32", "log"] }
 esp-alloc         = "0.6.0"
 
 # --- Embassy -------------------------------------------------------------
-embassy-executor  = { version = "0.7.0", features = ["task-arena-size-40960"] }
+# 64 KiB task arena: the webserver task's future grows by a 4 KiB flash
+# sector buffer while streaming an OTA image; 40 KiB left no headroom.
+embassy-executor  = { version = "0.7.0", features = ["task-arena-size-65536"] }
 embassy-time      = { version = "0.4.0" }
 embassy-sync      = { version = "0.6.2" }
 embassy-futures   = { version = "0.1.1" }
@@ -62,3 +64,14 @@ libm                 = "0.2.11"
 # --- OLED ----------------------------------------------------------------
 ssd1306              = { version = "0.10", default-features = false, features = ["async", "graphics"] }
 embedded-graphics    = "0.8"
+
+# --- HTTP ----------------------------------------------------------------
+httparse             = { version = "1.8", default-features = false }
+
+# --- OTA (firmware update over WiFi) ------------------------------------
+# esp-storage gives raw flash read/erase/write via the ROM SPI routines;
+# `src/ota.rs` implements the ESP-IDF OTA partition scheme on top of it.
+# (We don't use esp-hal-ota: its MMU helper needs the `concat_idents!`
+# macro, which the current Xtensa toolchain has removed.)
+esp-storage          = { version = "0.4.0", features = ["esp32"] }
+embedded-storage     = "0.3.1"

@@ -6,10 +6,12 @@
 //! safety interlock:
 //!
 //!   * Convention: with a fail-safe loop (12 V through a chain of NC
-//!     contacts), all inputs energised ⇒ all PCF8574 bits LOW ⇒ a
-//!     `0x00` reading on the lower 6 bits means SAFE.
-//!   * Any bit going HIGH (loop broken: E-Stop pressed, door opened,
-//!     wire cut) engages the interlock and emits `RelayCommand::AllOff`.
+//!     contacts), all inputs energised ⇒ all PCF8574 bits read LOW. After
+//!     we invert into "1 = energised" semantics, the SAFE state is
+//!     `energised == MASK` (all lower 6 bits set).
+//!   * Any input de-energising (loop broken: E-Stop pressed, door opened,
+//!     wire cut) drops its `energised` bit, engages the interlock and
+//!     emits `RelayCommand::AllOff`.
 //!   * Once locked, the interlock requires an external reset
 //!     (`kc868/safety/reset` MQTT command **and** all inputs back to
 //!     SAFE) — no auto-clear.

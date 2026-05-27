@@ -1,0 +1,18 @@
+# KC868-A6 OTA partition table (4 MB flash).
+#
+# Two equal app slots (ota_0 / ota_1, 1.5 MB each) so the running
+# firmware can write an update into the inactive slot, then `otadata`
+# records which slot the bootloader should boot next. espflash writes
+# the USB image into ota_0 (first app partition; no factory present),
+# and a blank `otadata` makes the IDF bootloader pick ota_0 on first
+# boot. From then on OTA ping-pongs ota_0 <-> ota_1.
+#
+# App image is ~750 KB today; 1.5 MB slots leave generous headroom.
+# Offsets are explicit so the layout never silently shifts.
+#
+# Name,     Type, SubType, Offset,   Size,     Flags
+nvs,        data, nvs,     0x9000,   0x4000,
+otadata,    data, ota,     0xd000,   0x2000,
+phy_init,   data, phy,     0xf000,   0x1000,
+ota_0,      app,  ota_0,   0x10000,  0x180000,
+ota_1,      app,  ota_1,   0x190000, 0x180000,

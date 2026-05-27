@@ -2,14 +2,14 @@
 //!
 //! 2-wire Pt100 configuration:
 //!   * Solder/wire jumpers between RTD+/RTDIN+ and RTD-/RTDIN- on the board.
-//!   * Config register = 0xC2:
+//!   * Config register = 0xC3 (50 Hz mains regions; use 0xC2 for 60 Hz):
 //!       bit 7  VBIAS              = 1 (on)
-//!       bit 6  Conversion mode    = 1 (auto, ~50 Hz update)
+//!       bit 6  Conversion mode    = 1 (auto, continuous)
 //!       bit 5  1-shot             = 0
 //!       bit 4  3-wire             = 0  (2-wire / 4-wire)
 //!       bits 3-2 Fault detection  = 00
 //!       bit 1  Fault clear        = 1
-//!       bit 0  50 Hz filter       = 0 (set to 1 in 50 Hz mains regions)
+//!       bit 0  50 Hz filter       = 1 (clear to 0 in 60 Hz mains regions)
 //!
 //! Register conversion (datasheet §8):
 //!     R_rtd = (raw >> 1) * Rref / 32768
@@ -25,7 +25,7 @@ const REG_CONFIG_WRITE: u8 = 0x80;
 const REG_RTD_MSB:      u8 = 0x01;
 const REG_FAULT_STATUS: u8 = 0x07;
 
-const CONFIG_2WIRE_AUTO_60HZ: u8 = 0xC2;
+const CONFIG_2WIRE_AUTO_50HZ: u8 = 0xC3;
 
 #[derive(Debug)]
 pub enum Error<E> {
@@ -50,7 +50,7 @@ where
 
     /// Bring up the chip in 2-wire continuous mode.
     pub async fn init(&mut self) -> Result<(), Error<E>> {
-        self.write_reg(REG_CONFIG_WRITE, CONFIG_2WIRE_AUTO_60HZ).await
+        self.write_reg(REG_CONFIG_WRITE, CONFIG_2WIRE_AUTO_50HZ).await
     }
 
     /// Read the latest raw 15-bit RTD code (fault bit already stripped).
@@ -61,7 +61,7 @@ where
         if raw & 0x0001 != 0 {
             let fault = self.read_reg(REG_FAULT_STATUS).await?;
             // Best effort: clear the fault flag so we'll retry next sample.
-            let _ = self.write_reg(REG_CONFIG_WRITE, CONFIG_2WIRE_AUTO_60HZ).await;
+            let _ = self.write_reg(REG_CONFIG_WRITE, CONFIG_2WIRE_AUTO_50HZ).await;
             return Err(Error::Fault(fault));
         }
         Ok(raw >> 1)

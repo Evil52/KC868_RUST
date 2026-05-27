@@ -14,15 +14,21 @@ use esp_wifi::wifi::{
 use log::{info, warn};
 use static_cell::StaticCell;
 
-const SSID: &str = env!("ESP32");
-const PASSWORD: &str = env!("14310324");
+const SSID: &str = env!("WIFI_SSID");
+const PASSWORD: &str = env!("WIFI_PASSWORD");
 
 // Compile-time bounds: ESP32 caps SSID at 32 bytes and password at 64
 // (heapless capacity of `ClientConfiguration::{ssid, password}`). If
 // these asserts ever fire, the build fails — no runtime panic path.
 const _: () = {
-    assert!(SSID.len() <= 32, "WIFI SSID > 32 bytes — see .cargo/config.toml");
-    assert!(PASSWORD.len() <= 64, "WIFI PASSWORD > 64 bytes — see .cargo/config.toml");
+    assert!(
+        SSID.len() <= 32,
+        "WIFI_SSID > 32 bytes — see .cargo/config.toml"
+    );
+    assert!(
+        PASSWORD.len() <= 64,
+        "WIFI_PASSWORD > 64 bytes — see .cargo/config.toml"
+    );
 };
 
 pub type NetStack = Stack<'static>;
@@ -33,8 +39,8 @@ pub fn start(
     device: WifiDevice<'static, WifiStaDevice>,
     seed: u64,
 ) -> NetStack {
-    static RESOURCES: StaticCell<StackResources<4>> = StaticCell::new();
-    let resources = RESOURCES.init(StackResources::<4>::new());
+    static RESOURCES: StaticCell<StackResources<16>> = StaticCell::new();
+    let resources = RESOURCES.init(StackResources::<16>::new());
 
     let (stack, runner) =
         embassy_net::new(device, Config::dhcpv4(Default::default()), resources, seed);

@@ -54,7 +54,7 @@ pub fn current_on_mask() -> u8 {
 const fn nz(n: u8) -> NonZeroU8 {
     match NonZeroU8::new(n) {
         Some(v) => v,
-        None => panic!("nz(): expected non-zero attempt count"), // compile-time only
+        None => panic!("nz(): expected non-zero argument"), // compile-time only
     }
 }
 

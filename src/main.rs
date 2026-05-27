@@ -29,8 +29,10 @@ mod pt100;
 mod safety;
 mod temperature;
 mod watchdog;
+mod webserver;
 mod wifi;
 mod mqtt;
+mod ota;
 
 use embassy_executor::Spawner;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
@@ -215,8 +217,9 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(button::button_task(test_button, relay_tx));
     // spawner.must_spawn(temperature::temperature_task(max31865)); // no sensor
 
-    // Wait for IP, then bring MQTT + comms watchdog up.
+    // Wait for IP, then bring MQTT + comms watchdog + webserver up.
     wifi::wait_for_link(&stack).await;
+    spawner.must_spawn(webserver::webserver_task(stack, relay_tx));
     spawner.must_spawn(mqtt::mqtt_publisher_task(stack));
     spawner.must_spawn(mqtt::mqtt_subscriber_task(stack, relay_tx));
     spawner.must_spawn(watchdog::watchdog_task(stack, relay_tx));

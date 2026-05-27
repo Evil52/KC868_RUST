@@ -270,9 +270,12 @@ mod mqtt_parsing_tests {
         }
         let idx: u8 = idx_str.parse().ok()?;
 
+        // Mirror mqtt::handle_relay_set: only the recognised tokens map to a
+        // command; anything else is rejected (returns None), not coerced OFF.
         let on = match payload {
-            b"1" | b"on" | b"ON" | b"true" => true,
-            _ => false,
+            b"1" | b"on" | b"ON" | b"true" | b"TRUE" => true,
+            b"0" | b"off" | b"OFF" | b"false" | b"FALSE" => false,
+            _ => return None,
         };
         Some((idx, on))
     }
@@ -289,14 +292,19 @@ mod mqtt_parsing_tests {
         check!(!on);
 
         // Text ON payloads
-        for payload in &[b"on" as &[u8], b"ON", b"true"] {
+        for payload in &[b"on" as &[u8], b"ON", b"true", b"TRUE"] {
             let (_, on) = parse_relay_cmd("kc868/relay/1/set", payload).ok_or("parse failed")?;
             check!(on);
         }
 
-        // Unknown payload → OFF
-        let (_, on) = parse_relay_cmd("kc868/relay/2/set", b"garbage").ok_or("parse failed")?;
-        check!(!on);
+        // Text OFF payloads
+        for payload in &[b"off" as &[u8], b"OFF", b"false", b"FALSE"] {
+            let (_, on) = parse_relay_cmd("kc868/relay/1/set", payload).ok_or("parse failed")?;
+            check!(!on);
+        }
+
+        // Unknown payload → rejected (None), not coerced to OFF
+        check!(parse_relay_cmd("kc868/relay/2/set", b"garbage").is_none());
 
         // Wrong prefix
         check!(parse_relay_cmd("kc868/status", b"1").is_none());
@@ -311,9 +319,8 @@ mod mqtt_parsing_tests {
         check!(parse_relay_cmd("kc868/relay/abc/set", b"1").is_none());
         check!(parse_relay_cmd("kc868/relay//set", b"1").is_none());
 
-        // Empty payload
-        let (_, on) = parse_relay_cmd("kc868/relay/0/set", b"").ok_or("parse failed")?;
-        check!(!on);
+        // Empty payload → rejected (None)
+        check!(parse_relay_cmd("kc868/relay/0/set", b"").is_none());
 
         // Extra topic levels rejected
         check!(parse_relay_cmd("kc868/relay/0/set/extra", b"1").is_none());

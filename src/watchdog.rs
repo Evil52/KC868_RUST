@@ -69,7 +69,7 @@ pub async fn watchdog_task(stack: Stack<'static>, relay_tx: RelayTx) {
         let mqtt_down = mqtt_age.map_or(false, |d| d > MQTT_GRACE);
         let wifi_down = wifi_age.map_or(false, |d| d > WIFI_GRACE);
 
-        // Pick the reason via an `if` chain — keeps the unrechable
+        // Pick the reason via an `if` chain — keeps the unreachable
         // `(false, false)` arm out of the source so there's no panic
         // path even at -O0, and produces clearer code for the reader.
         let reason: Option<&'static str> = if mqtt_down && wifi_down {

@@ -1,2 +1,4 @@
 /target
 AUDIT_REPORT.md
+# Local overrides with real secrets (Wi-Fi creds, broker host) — never commit.
+.cargo/config.local.toml
