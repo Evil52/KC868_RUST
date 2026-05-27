@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#5b6cf0">
+<title>KC868-A6</title>
+<style>
+:root{
+  --bg1:#5b6cf0; --bg2:#7c6ff5; --bg3:#9d7ef0;
+  --tile:rgba(255,255,255,.10); --tile-on:rgba(255,255,255,.22);
+  --stroke:rgba(255,255,255,.18); --stroke-on:rgba(255,255,255,.55);
+  --ink:#f4f6ff; --ink-dim:rgba(244,246,255,.62); --ink-faint:rgba(244,246,255,.40);
+  --accent:#ffe27a; --danger:#ff7a8a; --ok:#8affc1;
+  --shadow:0 10px 30px rgba(20,16,70,.28);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,ui-sans-serif,sans-serif;
+  color:var(--ink);
+  background:linear-gradient(155deg,var(--bg1) 0%,var(--bg2) 48%,var(--bg3) 100%);
+  background-attachment:fixed;
+  min-height:100vh;
+  padding:max(20px,env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto}
+
+/* ---- header: clock + weather ---- */
+.top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:34px}
+.clock{line-height:1}
+.clock .time{font-size:clamp(56px,12vw,104px);font-weight:200;letter-spacing:-2px;color:rgba(255,255,255,.92)}
+.clock .date{font-size:clamp(13px,2.5vw,16px);color:var(--ink-dim);margin-top:6px;text-transform:capitalize;letter-spacing:.3px}
+.wx{display:flex;align-items:center;gap:14px;text-align:right;min-height:64px}
+.wx .ic{font-size:48px;line-height:1;filter:drop-shadow(0 6px 10px rgba(20,16,70,.3))}
+.wx .tmp{font-size:34px;font-weight:300}
+.wx .desc{font-size:13px;color:var(--ink-dim);max-width:140px}
+.wx.loading .tmp{opacity:.4}
+
+/* ---- section heading ---- */
+.h{font-size:clamp(26px,5vw,40px);font-weight:300;color:rgba(255,255,255,.78);margin:6px 0 18px}
+
+/* ---- status pills ---- */
+.pills{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:30px}
+.pill{display:flex;align-items:center;gap:10px;background:var(--tile);border:1px solid var(--stroke);
+  border-radius:16px;padding:12px 18px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.pill .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok)}
+.pill .dot.bad{background:var(--danger);box-shadow:0 0 10px var(--danger);animation:flash .8s infinite}
+.pill .k{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-faint)}
+.pill .v{font-size:16px;font-weight:600}
+@keyframes flash{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ---- relay tiles ---- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:16px}
+.tile{
+  position:relative;background:var(--tile);border:1px solid var(--stroke);border-radius:22px;
+  padding:20px 18px 18px;cursor:pointer;overflow:hidden;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  transition:transform .18s cubic-bezier(.2,.8,.2,1),background .25s,border-color .25s,box-shadow .25s;
+  -webkit-user-select:none;user-select:none;
+}
+.tile:active{transform:scale(.97)}
+.tile.on{background:var(--tile-on);border-color:var(--stroke-on);box-shadow:var(--shadow)}
+.tile .glow{position:absolute;inset:auto 0 -40% 0;height:80%;
+  background:radial-gradient(60% 100% at 50% 100%,var(--accent),transparent 70%);
+  opacity:0;transition:opacity .3s;pointer-events:none}
+.tile.on .glow{opacity:.22}
+.tile .ico{width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+  border-radius:12px;margin-bottom:28px;color:var(--ink-dim);transition:color .25s}
+.tile.on .ico{color:var(--accent)}
+.tile .ico svg{width:26px;height:26px;stroke:currentColor;stroke-width:1.6;fill:none;
+  stroke-linecap:round;stroke-linejoin:round}
+.tile .nm{font-size:16px;font-weight:600}
+.tile .st{font-size:13px;color:var(--ink-dim);margin-top:2px}
+.tile.on .st{color:var(--accent)}
+.tile .toggle{position:absolute;top:18px;right:16px;width:42px;height:24px;border-radius:14px;
+  background:rgba(255,255,255,.18);transition:background .25s}
+.tile .toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
+  background:#fff;transition:transform .22s cubic-bezier(.2,.8,.2,1);box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.tile.on .toggle{background:var(--accent)}
+.tile.on .toggle::after{transform:translateX(18px)}
+.tile.pending{opacity:.6}
+
+/* ---- OTA (discreet, bottom) ---- */
+.ota{margin-top:34px;background:var(--tile);border:1px solid var(--stroke);border-radius:18px;
+  padding:16px 18px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.ota summary{cursor:pointer;list-style:none;font-size:14px;color:var(--ink-dim);display:flex;align-items:center;gap:8px}
+.ota summary::-webkit-details-marker{display:none}
+.ota[open] summary{color:var(--ink);margin-bottom:14px}
+.ota .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.ota input[type=file]{color:var(--ink-dim);font-size:13px;max-width:100%}
+.ota button{background:rgba(255,255,255,.16);border:1px solid var(--stroke);color:var(--ink);
+  border-radius:12px;padding:10px 18px;font-weight:600;cursor:pointer;font-size:14px;transition:background .2s}
+.ota button:hover{background:rgba(255,255,255,.26)}
+.ota button:disabled{opacity:.5;cursor:default}
+.ota .msg{font-size:13px;color:var(--ink-faint);margin-top:10px}
+
+.foot{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:30px;letter-spacing:.4px}
+
+@media(max-width:560px){
+  .top{flex-direction:row;align-items:center}
+  .wx .desc{display:none}
+  .grid{grid-template-columns:repeat(2,1fr);gap:12px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="clock">
+      <div class="time" id="time">--:--</div>
+      <div class="date" id="date">—</div>
+    </div>
+    <div class="wx loading" id="wx">
+      <div style="text-align:right">
+        <div class="tmp" id="wxt">--&deg;</div>
+        <div class="desc" id="wxd">Екатеринбург</div>
+      </div>
+      <div class="ic" id="wxi">&#9925;</div>
+    </div>
+  </div>
+
+  <div class="pills">
+    <div class="pill"><span class="dot" id="safety-dot"></span>
+      <div><div class="k">Безопасность</div><div class="v" id="safety">OK</div></div></div>
+    <div class="pill"><span class="dot" style="background:var(--accent);box-shadow:0 0 10px var(--accent)"></span>
+      <div><div class="k">Активно</div><div class="v"><span id="active">0</span>/6</div></div></div>
+  </div>
+
+  <div class="h">Реле</div>
+  <div class="grid" id="grid"></div>
+
+  <details class="ota">
+    <summary>&#9881; Обновление прошивки (OTA)</summary>
+    <div class="row">
+      <input type="file" id="fw" accept=".bin">
+      <button id="otabtn" onclick="otaUpload()">Загрузить и прошить</button>
+    </div>
+    <div class="msg" id="otamsg"></div>
+  </details>
+
+  <div class="foot">KC868-A6 &middot; Edge Relay System</div>
+</div>
+
+<script>
+var N=6;
+// Имена и иконки реле. Меняй NAMES под свои нагрузки.
+var NAMES=["Реле 1","Реле 2","Реле 3","Реле 4","Реле 5","Реле 6"];
+var ICON='<svg viewBox="0 0 24 24"><path d="M12 3v6"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>'; // power symbol
+var state=0, pending=-1;
+
+function render(){
+  var g=document.getElementById('grid'),h='';
+  for(var i=0;i<N;i++){
+    h+='<div class="tile" id="t'+i+'" onclick="toggle('+i+')">'
+      +'<div class="glow"></div><div class="toggle"></div>'
+      +'<div class="ico">'+ICON+'</div>'
+      +'<div class="nm">'+NAMES[i]+'</div>'
+      +'<div class="st" id="st'+i+'">Выкл</div></div>';
+  }
+  g.innerHTML=h;
+}
+function paint(){
+  var a=0;
+  for(var i=0;i<N;i++){
+    var on=!!(state&(1<<i)); if(on)a++;
+    var t=document.getElementById('t'+i);
+    t.classList.toggle('on',on);
+    t.classList.toggle('pending',i===pending);
+    document.getElementById('st'+i).textContent=on?'Вкл':'Выкл';
+  }
+  document.getElementById('active').textContent=a;
+}
+function toggle(i){
+  var on=!(state&(1<<i));            // optimistic UI
+  state = on ? (state|(1<<i)) : (state&~(1<<i));
+  pending=i; paint();
+  fetch('/api/relay/'+i+'/set',{method:'POST',body:JSON.stringify({state:on?1:0})})
+    .then(function(){pending=-1;update();})
+    .catch(function(){pending=-1;update();});
+}
+function update(){
+  fetch('/api/status').then(function(r){return r.json();}).then(function(d){
+    if(pending<0) state=d.mask;        // don't clobber a tile mid-toggle
+    paint();
+    var locked=!!d.locked;
+    document.getElementById('safety').textContent=locked?'БЛОКИРОВКА':'OK';
+    document.getElementById('safety-dot').className='dot'+(locked?' bad':'');
+  }).catch(function(){});
+}
+
+/* ---- clock: Екатеринбург, GMT+5 ---- */
+var WD=["воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"];
+var MO=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+function clock(){
+  var now=new Date();
+  // UTC+5 независимо от часового пояса браузера
+  var t=new Date(now.getTime()+(now.getTimezoneOffset()+300)*60000);
+  var hh=String(t.getHours()).padStart(2,'0'), mm=String(t.getMinutes()).padStart(2,'0');
+  document.getElementById('time').textContent=hh+':'+mm;
+  document.getElementById('date').textContent=WD[t.getDay()]+', '+t.getDate()+' '+MO[t.getMonth()];
+}
+
+/* ---- weather: Open-Meteo, free, no key, CORS-open ---- */
+// Екатеринбург: 56.84 N, 60.61 E
+var WX={0:['☀️','Ясно'],1:['🌤️','Малооблачно'],2:['⛅','Облачно'],
+3:['☁️','Пасмурно'],45:['🌫️','Туман'],48:['🌫️','Изморозь'],
+51:['🌦️','Морось'],53:['🌦️','Морось'],55:['🌦️','Морось'],
+61:['🌧️','Дождь'],63:['🌧️','Дождь'],65:['🌧️','Ливень'],
+71:['🌨️','Снег'],73:['🌨️','Снег'],75:['❄️','Снегопад'],
+77:['🌨️','Снежная крупа'],80:['🌦️','Ливни'],81:['🌧️','Ливни'],
+82:['⛈️','Сильный ливень'],85:['🌨️','Снег'],86:['❄️','Снегопад'],
+95:['⛈️','Гроза'],96:['⛈️','Гроза с градом'],99:['⛈️','Гроза с градом']};
+function weather(){
+  fetch('https://api.open-meteo.com/v1/forecast?latitude=56.84&longitude=60.61&current=temperature_2m,weather_code&timezone=Asia%2FYekaterinburg')
+    .then(function(r){return r.json();}).then(function(d){
+      var c=d.current, w=WX[c.weather_code]||['🌡️',''];
+      document.getElementById('wxt').innerHTML=Math.round(c.temperature_2m)+'&deg;';
+      document.getElementById('wxd').textContent=w[1]||'Екатеринбург';
+      document.getElementById('wxi').textContent=w[0];
+      document.getElementById('wx').classList.remove('loading');
+    }).catch(function(){
+      document.getElementById('wxd').textContent='Нет сети';
+      document.getElementById('wx').classList.remove('loading');
+    });
+}
+
+/* ---- OTA (IEEE CRC-32 must match src/ota.rs and tools/ota.ps1) ---- */
+function crc32(b){
+  var t=crc32.t;
+  if(!t){t=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}crc32.t=t;}
+  var c=0xFFFFFFFF;
+  for(var i=0;i<b.length;i++)c=t[(c^b[i])&255]^(c>>>8);
+  return(c^0xFFFFFFFF)>>>0;
+}
+function otaUpload(){
+  var f=document.getElementById('fw').files[0], s=document.getElementById('otamsg');
+  if(!f){s.textContent='Сначала выберите .bin';return;}
+  var btn=document.getElementById('otabtn'); btn.disabled=true;
+  f.arrayBuffer().then(function(ab){
+    var b=new Uint8Array(ab), c=crc32(b);
+    s.textContent='Загрузка '+b.length+' байт, crc '+c+' …';
+    return fetch('/api/ota',{method:'POST',headers:{'X-Ota-Crc32':String(c)},body:b});
+  }).then(function(r){return r.text();}).then(function(txt){
+    s.textContent=txt; btn.disabled=false;
+  }).catch(function(){
+    s.textContent='Устройство перезагружается (загрузка прошла)'; btn.disabled=false;
+  });
+}
+
+render(); update(); clock(); weather();
+setInterval(update,2000);
+setInterval(clock,1000);
+setInterval(weather,600000); // 10 мин
+</script>
+</body>
+</html>

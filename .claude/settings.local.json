@@ -48,7 +48,15 @@
       "Bash(echo \"=== CARGO_EXIT=$? ===\")",
       "Bash(echo \"=== exit=$? ===\")",
       "PowerShell(espflash flash --ignore-app-descriptor --partition-table partitions.csv --erase-parts otadata --port COM5 target/xtensa-esp32-none-elf/release/kc868_a6)",
-      "PowerShell(powershell -ExecutionPolicy Bypass -File tools\\\\ota.ps1 -Device 192.168.137.244)"
+      "PowerShell(powershell -ExecutionPolicy Bypass -File tools\\\\ota.ps1 -Device 192.168.137.244)",
+      "PowerShell(git config user.email \"rnyce9405@gmail.com\")",
+      "PowerShell(git config user.name \"user\")",
+      "PowerShell(cargo build --release --bin kc868_a6 2>&1)",
+      "PowerShell(espflash flash --ignore-app-descriptor --partition-table partitions.csv --erase-parts otadata --port COM5 target\\\\xtensa-esp32-none-elf\\\\release\\\\kc868_a6 2>&1)",
+      "PowerShell([System.IO.Ports.SerialPort]::GetPortNames\\(\\); Write-Host \"---\"; Get-CimInstance -ClassName Win32_PnPEntity | Where-Object { $_.Name -match 'COM\\\\d+' } | Select-Object -ExpandProperty Name)",
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'espflash|cargo|putty|monitor' } | Select-Object Id,ProcessName,StartTime)",
+      "PowerShell(Start-Sleep -Seconds 10; try { $r = Invoke-WebRequest -Uri \"http://192.168.137.244/api/status\" -TimeoutSec 10 -UseBasicParsing; Write-Host \"STATUS:\" $r.StatusCode; Write-Host \"BODY:\" $r.Content } catch { Write-Host \"FAIL:\" $_.Exception.Message })",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://192.168.137.244/\" -TimeoutSec 10 -UseBasicParsing; $html=$r.Content; Write-Host \\(\"HTML {0} bytes\" -f $html.Length\\); Write-Host \\(\"Open-Meteo: {0}\" -f \\($html -match 'open-meteo'\\)\\); Write-Host \\(\"Yekaterinburg clock: {0}\" -f \\($html -match 'Yekaterinburg'\\)\\); Write-Host \\(\"Relay tiles: {0}\" -f \\($html -match 'class=.tile'\\)\\) } catch { Write-Host \"FAIL:\" $_.Exception.Message })"
     ]
   }
 }

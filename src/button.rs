@@ -29,7 +29,7 @@ use crate::relays::{RelayCommand, RelayTx};
 use crate::safety;
 
 const DEBOUNCE: Duration = Duration::from_millis(50);
-const CHASE_STEP: Duration = Duration::from_millis(300);
+const CHASE_STEP: Duration = Duration::from_millis(800);
 
 #[embassy_executor::task]
 pub async fn button_task(mut button: Input<'static>, relay_tx: RelayTx) {
